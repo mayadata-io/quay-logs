@@ -16,9 +16,7 @@ go build cmd/main.go
 # Following activities are handled by this binary:
 #
 # - Downloads latest quay images with popularity ranks
-# - Downloads latest quay logs for each image
-# - Sanitises these logs by removing duplicate entries
-# - Enhances the sanitised logs by adding ip domain information
+
 ./main --quay-auth-token=<auth token> --quay-namespace=openebs
 ```
 
