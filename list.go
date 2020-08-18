@@ -44,7 +44,6 @@ type Listable struct {
 
 // // NewLister returns a new instance of Listable
 func NewLister(config ListableConfig) (*Listable, error) {
-	fmt.Println(config, "config")
 	if(config.IsWriteToFile) {
 		folder := path.Join(
 			config.BaseOutputFilePath,
