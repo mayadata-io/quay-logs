@@ -22,7 +22,7 @@ import (
 	"os"
 	"os/exec"
 
-	gmetrics "github.com/mayadata.io/growth-metrics"
+	gmetrics "github.com/mayadata.io/quay-logs"
 )
 
 var (
