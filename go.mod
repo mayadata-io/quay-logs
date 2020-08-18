@@ -1,4 +1,4 @@
-module github.com/mayadata.io/growth-metrics
+module github.com/mayadata.io/quay-logs
 
 go 1.13
 
