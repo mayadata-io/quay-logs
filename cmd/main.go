@@ -55,7 +55,7 @@ var (
 
 func mkdirAll() {
 	var cmds = map[string][]string{
-		"logs":      {"-p", *logsFilePath},
+		"logs": {"-p", *logsFilePath},
 	}
 	for _, commandargs := range cmds {
 		cmd := exec.Command("mkdir", commandargs...)
@@ -99,6 +99,7 @@ func main() {
 			err,
 		)
 	}
+	//repolist contains repos in order of popularity
 	repolist, err := l.ListReposAndWriteToFileOptionally()
 	if err != nil {
 		log.Fatalf(

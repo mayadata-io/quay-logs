@@ -49,7 +49,7 @@ type Loggable struct {
 	BaseOutputFilePath string
 	IsWriteToFile      bool
 	Debug              bool
-
+	//the value for next two will be assigned in Log()
 	currentLogs     []byte
 	currentFilename string
 }
@@ -60,6 +60,7 @@ func NewLogger(config LoggableConfig) (*Loggable, error) {
 		config.BaseOutputFilePath,
 		config.Namespace,
 		config.Name,
+		//example: ../logs/namespace/reponame/
 	)
 	cmd := exec.Command(
 		"mkdir",
