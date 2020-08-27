@@ -1,51 +1,50 @@
-# Quay-logs - Contributing/Docs
-### cmd/main.go file
->The possible list of command line arguments/flags which can be given to the `go run cmd/main.go` command are listed inside the var( ) method.
- - The main function has the following logic
- -- It makes the required directories.
- -- It lists all the repos in the sorted order of popularity in the namespace into `repolist`.
- -- It iterated through each of the repos and download its Logs and stores the in different files.
- 
-- **flag.Parse( )** : parses the flags. It must be called before using any of the flags.
-- **mkdirAll( )**: makes all the required directories/folders from the arguments  by formatting them with -p flags.
--- Here we create 1 directory/folders
-**/logs** : for storing the repos in order of popularity
+# Quay-logs - How to Contribute
 
-- We create a `NewLister` (refer `list.go`) and set `IsWriteToFile` false because we don't want to store the data in files.
-- We call the `ListReposAndWriteToFileOptionally( )`function to get all the repolist in the namespace as a JSON. It returns all the repos in sorted order of popularity.
-- --
-### list.go file
-- **NewLister( )** - It creates a new folder by the mkdir command using the arguments passed to it. It returns a type of new Listable.
+- Find an issue to work on or create a new issue. The issues are maintained at [mayadata-io/quay-logs/issues](https://github.com/mayadata-io/quay-logs/issues).
+- Claim your issue by commenting on your intent to work on it to avoid duplication of efforts.
+- Fork the repository on GitHub.
+- Create a branch from where you want to base your work (usually master).
+- Make your changes. If you are working on code contributions, please see **Setting up the Development Environment** below.
+- Relevant coding style guidelines are the [Go Code Review Comments](https://code.google.com/p/go-wiki/wiki/CodeReviewComments) and the _Formatting and style_ section of Peter Bourgon's [Go: Best Practices for Production Environments](http://peter.bourgon.org/go-in-production/#formatting-and-style).
+- Commit your changes by making sure the commit messages convey the need and notes about the commit.
+- Push your changes to the branch in your fork of the repository.
 
-- **ListReposAndWriteToFileOptionally( )** -actually calls `ListReposByPopularityAndWriteToFileOptionally( )`function. 
-- **ListReposByPopularityAndWriteToFileOptionally( )** - It calls the `RequestReposForPageToken( )` which returns all repos name in order of popularity.
--- Right now we don't have 100 repos that's why all the data are in one page. Thus some codes are commented.
+## Setting up your Development Environment
 
-- **RequestReposForPageToken( )** - Creates a HTTPRequest with some query parameters and invokes it. 
--- Since `IsWriteToFile` is false so it **doesn't** call`WriteToFile`) and the JSON is unmarshaled and returned. 
+This project is implemented using Go and uses the standard golang tools for development and build. In addition, this project relies on Quay and Kubernetes. It is expected that the contributors:
 
-- **WriteToFile( )** - Writes the content of response body into passed filename with file mode 0644.
-- --
-### types.go file
-- It has all the required structures which can be used to extract the data from quay(JSON).
-- The structures are in the order of
--- PopularList -> Popular
--- LogList -> Log -> Metadata -> ResolvedIP
+- are familiar with working with Go;
+- are familiar with Docker containers;
 
----
-### logs.go file
-- **NewLogger( )** -  It creates a new folder by the mkdir command using the arguments passed to it for each of the repos. Example: `./logs/namespace/reponame/` It returns a type of new Listable.
-- **Log( )** - It calls `RequestLogsForPageToken( )` to get the logs from the Quay API. It stores them in separate files by calling `WriteToFile` internally. 
---Here next page is available since the API returns 20 `logs` at once. So each files can contain at max 20 `logs`.
-- **RequestLogsForPageToken( )** -  Creates a HTTPRequest with some query parameters and invokes it. 
--- Since `IsWriteToFile` is true here so it calls `WriteToFile`) and the JSON is unmarshaled and returned. 
+Run the command `go run cmd/main.go` with the `quay access token` and a `quay namespace` to create an executable.
 
-- **WriteToFile( )** -  Writes the content of response body into passed filename with file mode 0644. It stores the logs into `./logs/namespace/reponame/filename.json`
->**Why we have created `/logs` folder🤔?**
->Since the data in `./logs` folder we are creating, is used by the [growth-metrics](https://github.com/mayadata-io/growth-metrics) repo to extract the `logs` and then `sanitise` the logs to produce meaningful data. Which then can be sent to Prometheus and Grafana to display it in graphs.
----
-### http_client.go file
-- It has all the necessary functions to make a **HTTPRequest** and **Invoke** it. 
-- --
-For quay-logs FAQs refer [quay_faq.md](https://github.com/mayadata-io/quay-logs/blob/master/quay_faq.md) file in the repo.
-Troubleshooting information is available at `troubleshooting.md` file.
+- For more information related to quay refer [quay_faq.md](https://github.com/mayadata-io/quay-logs/blob/master/quay_faq.md).
+
+Download the required linting tools of your choice in your code editor for proper code formatting, then start making your changes.
+
+## Committing your work
+
+All the commits made to the repository should be signed by your Mayadata email ID. For signing-off according to the [DCO standards](http://developercertificate.org/) use -s flag.
+
+**Example:**
+
+> `git commit -s -m "Your commit message"`
+
+- Commits should be as small as possible. Each commit should follow the checklist below:
+  - For code changes, add tests relevant to the fixed bug or new feature.
+  - Pass the compile and tests - includes spell checks, formatting, etc.
+  - Commit header (first line) should convey what changed.
+  - Commit body should include details such as why the changes are required and how the proposed changes.
+  - DCO Signed.
+
+## Sending Pull Requests
+
+- Rebase to the current master branch before submitting your pull request.
+- Provide appropriate comments and mention what changes have been done briefly.
+- Add at least one reviewer or more from the contributors.
+
+## Resources
+
+- Refer the full contributing guidelines here - [Contributing to OpenEBS Maya](https://github.com/openebs/maya/blob/master/CONTRIBUTING.md#contributing-to-openebs-maya)
+- Refer troubleshooting.md for more information.
+- For quay-logs FAQs refer to this [link](https://github.com/mayadata-io/quay-logs/blob/master/quay_faq.md).

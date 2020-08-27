@@ -28,7 +28,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// // ListableConfig is used to initialise Listable instance
+// ListableConfig is used to initialise Listable instance
 type ListableConfig struct {
 	Namespace          string
 	AuthToken          string
@@ -37,14 +37,16 @@ type ListableConfig struct {
 	Debug              bool
 }
 
-// // Listable is used to list all images of the given namespace
+// Listable is used to list all images of the given namespace
 type Listable struct {
 	*Popularity
 }
 
-// // NewLister returns a new instance of Listable
+// NewLister returns a new instance of Listable
+// It creates a new folder by the mkdir command using the arguments
+// passed to it.
 func NewLister(config ListableConfig) (*Listable, error) {
-	if(config.IsWriteToFile) {
+	if config.IsWriteToFile {
 		folder := path.Join(
 			config.BaseOutputFilePath,
 			config.Namespace,
@@ -53,6 +55,7 @@ func NewLister(config ListableConfig) (*Listable, error) {
 			"mkdir",
 			"-p",
 			folder,
+			//It will be something like "mkdir -p ./popularity/namespace/
 		)
 		err := cmd.Run()
 		if err != nil {
@@ -63,7 +66,7 @@ func NewLister(config ListableConfig) (*Listable, error) {
 			)
 		}
 	}
-	
+
 	return &Listable{
 		Popularity: &Popularity{
 			Namespace:          config.Namespace,
@@ -77,26 +80,32 @@ func NewLister(config ListableConfig) (*Listable, error) {
 
 // ListReposAndWriteToFileOptionally invokes the API to list images
 // belonging to a namespace and then write them to a file
+// This actually calls `ListReposByPopularityAndWriteToFileOptionally( )`function.
 func (l *Listable) ListReposAndWriteToFileOptionally() (PopularList, error) {
 	return l.Popularity.ListReposByPopularityAndWriteToFileOptionally()
 }
 
-// // PopularityOption is typed function to mutate Popularity instance
+// PopularityOption is typed function to mutate Popularity instance
 type PopularityOption func(*Popularity) error
 
-// // Popularity helps fetch images ranked with their popularity
+// Popularity helps fetch images ranked with their popularity
 type Popularity struct {
 	Namespace          string
 	AuthToken          string
 	BaseOutputFilePath string
 	IsWriteToFile      bool
 	Debug              bool
-
+	// currentFilename will be assigned in the below function
 	currentFilename string
 }
 
 // ListReposByPopularityAndWriteToFileOptionally requests for repos by
 // invoking API and subsequently writes them to files.
+//
+// It calls the `RequestReposForPageToken( )` which returns all repos
+// name in order of popularity.
+// -- Right now we don't have 100 repos that's why all the data are in
+// one page. Thus some codes are commented below.
 func (p *Popularity) ListReposByPopularityAndWriteToFileOptionally() (PopularList, error) {
 	var out = &PopularList{}
 
@@ -117,6 +126,7 @@ func (p *Popularity) ListReposByPopularityAndWriteToFileOptionally() (PopularLis
 		//	Logs is a list API call that is paged. Each page can
 		// optionally be saved to a new file.
 		filename := fmt.Sprintf("%s-%d.json", now, index)
+		//currentFilename example ./popularity/namespace/filename
 		p.currentFilename = path.Join(p.BaseOutputFilePath, p.Namespace, filename)
 
 		// Invoke API to request for logs
@@ -124,6 +134,9 @@ func (p *Popularity) ListReposByPopularityAndWriteToFileOptionally() (PopularLis
 		// NOTE:
 		//	This will run through a set of post functions if set,
 		// after executing this API
+		//
+		// RequestReposForPageToken( ): Creates a HTTPRequest with some query
+		// parameters and invokes it.
 		got, err := p.RequestReposForPageToken(pagetoken)
 		if err != nil {
 			return PopularList{}, err
@@ -149,7 +162,9 @@ func (p *Popularity) ListReposByPopularityAndWriteToFileOptionally() (PopularLis
 }
 
 // RequestReposForPageToken lists the repos belonging to a namespace
+// Creates a HTTPRequest with some query parameters and invokes it.
 func (p *Popularity) RequestReposForPageToken(pagetoken string) (PopularList, error) {
+	// creating the request
 	req := &HTTPRequest{
 		AuthToken: p.AuthToken,
 		URL:       "https://quay.io/api/v1/repository",
@@ -160,6 +175,8 @@ func (p *Popularity) RequestReposForPageToken(pagetoken string) (PopularList, er
 			"next_page":  pagetoken,
 		},
 	}
+
+	//resp contains the repo list in raw byte format in one page
 	resp, err := req.Invoke()
 	if err != nil {
 		return PopularList{}, errors.Wrapf(
@@ -168,9 +185,15 @@ func (p *Popularity) RequestReposForPageToken(pagetoken string) (PopularList, er
 			req.URL,
 		)
 	}
+
+	// Since `IsWriteToFile` is false so it **doesn't** call `WriteToFile`
 	if p.IsWriteToFile {
+		//writing the reponse in ./popularity/namespace/currentfilename.json
 		p.WriteToFile(resp.Body(), p.currentFilename)
 	}
+
+	// it is capable of holding the list of images
+	// and the JSON is unmarshaled and returned.
 	var out PopularList
 	err = json.Unmarshal(resp.Body(), &out)
 	if err != nil {
@@ -182,11 +205,14 @@ func (p *Popularity) RequestReposForPageToken(pagetoken string) (PopularList, er
 	if p.Debug {
 		log.Printf("Successfully invoked popularity request")
 	}
+	//returning the PopularList
 	return out, nil
 }
 
 // WriteToFile creates a file with images having
 // popularity ratings. This file is named with today's date.
+// It writes the content of response body into passed filename with
+// file mode 0644.
 func (p *Popularity) WriteToFile(raw []byte, filename string) error {
 	err := ioutil.WriteFile(
 		filename,

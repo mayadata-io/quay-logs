@@ -25,6 +25,9 @@ import (
 	gmetrics "github.com/mayadata.io/quay-logs"
 )
 
+// The possible list of command line arguments/flags which can be
+// given to the `go run cmd/main.go` command are listed inside
+// the var( ) block.
 var (
 	debug = flag.Bool(
 		"debug",
@@ -53,6 +56,11 @@ var (
 	)
 )
 
+// makes all the required directories/folders from the arguments
+// by formatting them with -p flags.
+// - Here we create 1 directory/folder i.e ./logs
+//
+// ./logs is used for storing the repos in order of popularity
 func mkdirAll() {
 	var cmds = map[string][]string{
 		"logs": {"-p", *logsFilePath},
@@ -70,7 +78,14 @@ func mkdirAll() {
 	}
 }
 
+// The main function has the following logic
+// - It makes the required directories.
+// - It lists all the repos in the sorted order of popularity in the
+//   namespace into `repolist`.
+// - It iterates through each of the repos and download its Logs and
+//   stores them in different files.
 func main() {
+	// parses the flags. It must be called before using any of the flags.
 	flag.Parse()
 
 	if *quayAuthToken == "" {
@@ -85,6 +100,10 @@ func main() {
 
 	// list repos
 	log.Print("Will list all repos")
+
+	// We create a `NewLister` (refer `list.go`) and set
+	//`IsWriteToFile` false because we don't want to store the data
+	// in the files.
 	l, err := gmetrics.NewLister(gmetrics.ListableConfig{
 		AuthToken:          *quayAuthToken,
 		BaseOutputFilePath: "",
@@ -92,14 +111,18 @@ func main() {
 		IsWriteToFile:      false,
 		Debug:              *debug,
 	})
-
+	//checking for errors
 	if err != nil {
 		log.Fatalf(
 			"Failed to initialise lister: %v",
 			err,
 		)
 	}
-	//repolist contains repos in order of popularity
+
+	// repolist contains repos in order of popularity
+	// We call the `ListReposAndWriteToFileOptionally( )` function
+	// to get all the repolist in the namespace as a JSON format.
+	// It returns all the repos in sorted order of popularity.
 	repolist, err := l.ListReposAndWriteToFileOptionally()
 	if err != nil {
 		log.Fatalf(
