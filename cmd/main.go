@@ -20,7 +20,6 @@ import (
 	"flag"
 	"log"
 	"os"
-	"os/exec"
 
 	gmetrics "github.com/mayadata.io/quay-logs"
 )
@@ -54,6 +53,11 @@ var (
 		"./logs",
 		"(optional) absolute path to the quay repo's log files",
 	)
+	windows = flag.Bool(
+		"windows",
+		false,
+		"Set to tue when working on windows systems",
+	)
 )
 
 // makes all the required directories/folders from the arguments
@@ -62,18 +66,26 @@ var (
 //
 // ./logs is used for storing the repos in order of popularity
 func mkdirAll() {
-	var cmds = map[string][]string{
-		"logs": {"-p", *logsFilePath},
-	}
-	for _, commandargs := range cmds {
-		cmd := exec.Command("mkdir", commandargs...)
-		err := cmd.Run()
+	// Uncomment below code if current code isn't worrking on Linux.
+	// If it works then remove the commented codes
+	// var cmds = map[string][]string{
+	// 	"logs": {"-p", *logsFilePath},
+	// }
+	// for _, commandargs := range cmds {
+	// 	cmd := exec.Command("mkdir", commandargs...)
+	// 	err := cmd.Run()
+	// 	if err != nil {
+	// 		log.Fatalf(
+	// 			"Failed to create folder: %s : %v",
+	// 			commandargs,
+	// 			err,
+	// 		)
+	// 	 }
+	// }
+	if _, err := os.Stat(*logsFilePath); os.IsNotExist(err) {
+		err := os.Mkdir(*logsFilePath, 0755)
 		if err != nil {
-			log.Fatalf(
-				"Failed to create folder: %s : %v",
-				commandargs,
-				err,
-			)
+			log.Fatal(err)
 		}
 	}
 }
@@ -103,13 +115,15 @@ func main() {
 
 	// We create a `NewLister` (refer `list.go`) and set
 	//`IsWriteToFile` false because we don't want to store the data
-	// in the files.
+	// in the files. It is not optimized for windows. It will break
+	// when IsWritetToFile is set to true. In some future commit.
 	l, err := gmetrics.NewLister(gmetrics.ListableConfig{
 		AuthToken:          *quayAuthToken,
 		BaseOutputFilePath: "",
 		Namespace:          *quayNamespace,
 		IsWriteToFile:      false,
 		Debug:              *debug,
+		Windows:            *windows,
 	})
 	//checking for errors
 	if err != nil {
@@ -141,6 +155,7 @@ func main() {
 			IsWriteToFile:      true,
 			BaseOutputFilePath: *logsFilePath,
 			Debug:              *debug,
+			Windows:            *windows,
 		})
 		if err != nil {
 			log.Fatalf(

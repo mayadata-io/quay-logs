@@ -21,8 +21,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/pkg/errors"
@@ -36,6 +38,7 @@ type LoggableConfig struct {
 	BaseOutputFilePath string
 	IsWriteToFile      bool
 	Debug              bool
+	Windows            bool
 }
 
 // LoggableOption is a typed function to mutate Loggable instance
@@ -49,9 +52,11 @@ type Loggable struct {
 	BaseOutputFilePath string
 	IsWriteToFile      bool
 	Debug              bool
-	//the value for next two will be assigned in Log()
+	Windows            bool
+	//the value for next three will be assigned in Log()
 	currentLogs     []byte
-	currentFilename string
+	currentFileName string
+	fileNamePath    string
 }
 
 // NewLogger returns a new instance of Loggable
@@ -64,19 +69,33 @@ func NewLogger(config LoggableConfig) (*Loggable, error) {
 		config.Name,
 		//example: ../logs/namespace/reponame/
 	)
-	cmd := exec.Command(
-		"mkdir",
-		"-p",
-		folder,
-	)
-	err := cmd.Run()
-	if err != nil {
-		return nil, errors.Wrapf(
-			err,
-			"Failed to create repo logs folder: Name %q",
+	if config.Windows == true {
+		// since windows doesn't support '\'
+		p := filepath.FromSlash(folder)
+		if config.Debug == true {
+			fmt.Println("Creating folders: " + p)
+		}
+		err := os.MkdirAll(p, 0755)
+		if err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		// this block is for linux. Supports '/' filepath systems
+		cmd := exec.Command(
+			"mkdir",
+			"-p",
 			folder,
 		)
+		err := cmd.Run()
+		if err != nil {
+			return nil, errors.Wrapf(
+				err,
+				"Failed to create repo logs folder: Name %q",
+				folder,
+			)
+		}
 	}
+
 	return &Loggable{
 		AuthToken:          config.AuthToken,
 		Namespace:          config.Namespace,
@@ -84,15 +103,16 @@ func NewLogger(config LoggableConfig) (*Loggable, error) {
 		BaseOutputFilePath: config.BaseOutputFilePath,
 		IsWriteToFile:      config.IsWriteToFile,
 		Debug:              config.Debug,
+		Windows:            config.Windows,
 	}, nil
 }
 
 // Log requests for logs by invoking API and subsequently
 // writes them to files.
-// 
-//  It calls `RequestLogsForPageToken( )` to get the logs from 
-// the Quay API. It stores them in separate files by calling 
-// `WriteToFile` internally. 
+//
+//  It calls `RequestLogsForPageToken( )` to get the logs from
+// the Quay API. It stores them in separate files by calling
+// `WriteToFile` internally.
 // --Here next page is available since the API returns 20 `logs`
 // at once. So each files can contain at max 20 `logs`.
 func (l *Loggable) Log() (LogList, error) {
@@ -105,6 +125,10 @@ func (l *Loggable) Log() (LogList, error) {
 	// File names for all downloads need to have same prefix
 	// Variable 'now' defines this prefix
 	var now = time.Now().Format("Jan-02-2006-15:04:05")
+	if l.Windows == true {
+		// since windows doesn't support ':'
+		now = time.Now().Format("Jan-02-2006-15-04-05")
+	}
 	for isNextpage {
 		// Set or reset filename
 		//
@@ -115,12 +139,21 @@ func (l *Loggable) Log() (LogList, error) {
 		//	Logs is a list API call that is paged. Each page can
 		// optionally be saved to a new file.
 		filename := fmt.Sprintf("%s-%d.json", now, index)
-		l.currentFilename = path.Join(
-			l.BaseOutputFilePath,
-			l.Namespace,
-			l.Name,
-			filename,
-		)
+		// creating relative foldername,
+		folderPath := path.Join(l.BaseOutputFilePath, l.Namespace, l.Name)
+		if l.Windows == true {
+			l.fileNamePath = filepath.FromSlash(folderPath)
+		} else {
+			l.fileNamePath = ""
+		}
+
+		// creating relative filename
+		jsonPath := path.Join(folderPath, filename)
+		if l.Windows == true {
+			l.currentFileName = filepath.FromSlash(jsonPath)
+		} else {
+			l.currentFileName = jsonPath
+		}
 
 		// Invoke API to request for logs
 		//
@@ -141,11 +174,11 @@ func (l *Loggable) Log() (LogList, error) {
 	return *out, nil
 }
 
-// RequestLogsForPageToken lists the logs of the images belonging 
+// RequestLogsForPageToken lists the logs of the images belonging
 // to a namespace. It Creates a HTTPRequest with some query parameters
-// and invokes it. 
-// -- Since `IsWriteToFile` is true here so it calls `WriteToFile` 
-// and the JSON is unmarshaled and returned. 
+// and invokes it.
+// -- Since `IsWriteToFile` is true here so it calls `WriteToFile`
+// and the JSON is unmarshaled and returned.
 func (l *Loggable) RequestLogsForPageToken(pagetoken string) (LogList, error) {
 	if l.Debug {
 		log.Printf(
@@ -186,16 +219,19 @@ func (l *Loggable) RequestLogsForPageToken(pagetoken string) (LogList, error) {
 		)
 		return LogList{}, nil
 	}
+	if l.Debug {
+		log.Printf("Writing file: ---------------> " + l.currentFileName)
+	}
 	if l.IsWriteToFile {
-		err = l.WriteToFile(resp.Body(), l.currentFilename)
+		err = l.WriteToFile(resp.Body(), l.currentFileName, l.fileNamePath)
 		if err != nil {
 			return LogList{}, errors.Wrapf(
 				err,
-				"Failed to write logs to %q",
-				l.currentFilename,
+				"Failed to write logs to %s",
+				l.currentFileName,
 			)
 		}
-		log.Printf("Wrote logs to %q", l.currentFilename)
+		log.Printf("Sucessfully wrote logs to file --------------> " + l.currentFileName)
 	}
 	var out LogList
 	err = json.Unmarshal(resp.Body(), &out)
@@ -210,14 +246,23 @@ func (l *Loggable) RequestLogsForPageToken(pagetoken string) (LogList, error) {
 
 // WriteToFile creates a file with images having popularity ratings.
 // This file is named with today's date.
-// It writes the content of response body into passed filename with 
-// file mode 0644. It stores the logs into 
+// It writes the content of response body into passed filename with
+// file mode 0644. It stores the logs into
 // `./logs/namespace/reponame/filename.json`
-func (l *Loggable) WriteToFile(raw []byte, filename string) error {
-	err := ioutil.WriteFile(filename, raw, 0644)
-	return errors.Wrapf(
-		err,
-		"Failed to write logs to %q",
-		filename,
-	)
+func (l *Loggable) WriteToFile(raw []byte, filename string, fpath string) error {
+	if fpath != "" {
+		if _, err := os.Stat(filename); os.IsNotExist(err) {
+			os.MkdirAll(fpath, 0700) // Create your file
+		}
+	}
+
+	errfile := ioutil.WriteFile(filename, raw, 0644)
+	if errfile != nil {
+		return errors.Wrapf(
+			errfile,
+			"Failed to write filename to %s",
+			filename,
+		)
+	}
+	return nil
 }

@@ -24,7 +24,7 @@ Download the required linting tools of your choice in your code editor for prope
 
 ## Committing your work
 
-All the commits made to the repository should be signed by your Mayadata email ID. For signing-off according to the [DCO standards](http://developercertificate.org/) use -s flag.
+All the commits made to the repository should be signed by your MayaData email ID. For signing-off according to the [DCO standards](http://developercertificate.org/) use -s flag.
 
 **Example:**
 

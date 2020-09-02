@@ -21,8 +21,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/pkg/errors"
@@ -35,6 +37,7 @@ type ListableConfig struct {
 	BaseOutputFilePath string
 	IsWriteToFile      bool
 	Debug              bool
+	Windows            bool
 }
 
 // Listable is used to list all images of the given namespace
@@ -51,19 +54,32 @@ func NewLister(config ListableConfig) (*Listable, error) {
 			config.BaseOutputFilePath,
 			config.Namespace,
 		)
-		cmd := exec.Command(
-			"mkdir",
-			"-p",
-			folder,
-			//It will be something like "mkdir -p ./popularity/namespace/
-		)
-		err := cmd.Run()
-		if err != nil {
-			return nil, errors.Wrapf(
-				err,
-				"Failed to create repo list folder: Name %q",
+		if config.Windows == true {
+			// since windows doesn't support '\'
+			p := filepath.FromSlash(folder)
+			if config.Debug == true {
+				fmt.Println("Creating folders: " + p)
+			}
+			err := os.MkdirAll(p, 0755)
+			if err != nil {
+				log.Fatal(err)
+			}
+		} else {
+			// this block is for linux. Supports '/' filepath systems
+			cmd := exec.Command(
+				"mkdir",
+				"-p",
 				folder,
+				//It will be something like "mkdir -p ./popularity/namespace/
 			)
+			err := cmd.Run()
+			if err != nil {
+				return nil, errors.Wrapf(
+					err,
+					"Failed to create repo list folder: Name %q",
+					folder,
+				)
+			}
 		}
 	}
 
@@ -95,8 +111,10 @@ type Popularity struct {
 	BaseOutputFilePath string
 	IsWriteToFile      bool
 	Debug              bool
-	// currentFilename will be assigned in the below function
-	currentFilename string
+	Windows            bool
+	// the below will be assigned in the next function
+	currentFileName string
+	fileNamePath    string
 }
 
 // ListReposByPopularityAndWriteToFileOptionally requests for repos by
@@ -116,6 +134,10 @@ func (p *Popularity) ListReposByPopularityAndWriteToFileOptionally() (PopularLis
 	// File names for all downloads need to have same prefix
 	// Variable 'now' defines this prefix
 	var now = time.Now().Format("Jan-02-2006-15:04:05")
+	if p.Windows == true {
+		// since windows doesn't support ':'
+		now = time.Now().Format("Jan-02-2006-15-04-05")
+	}
 	for isNextpage {
 		// Set or reset filename
 		//
@@ -126,8 +148,21 @@ func (p *Popularity) ListReposByPopularityAndWriteToFileOptionally() (PopularLis
 		//	Logs is a list API call that is paged. Each page can
 		// optionally be saved to a new file.
 		filename := fmt.Sprintf("%s-%d.json", now, index)
-		//currentFilename example ./popularity/namespace/filename
-		p.currentFilename = path.Join(p.BaseOutputFilePath, p.Namespace, filename)
+		//folderPath example ./popularity/namespace/
+		folderPath := path.Join(p.BaseOutputFilePath, p.Namespace)
+		if p.Windows == true {
+			p.fileNamePath = filepath.FromSlash(folderPath)
+		} else {
+			p.fileNamePath = ""
+		}
+
+		//jsonPath example ./popularity/namespace/filename
+		jsonPath := path.Join(folderPath, filename) // relative filename
+		if p.Windows == true {
+			p.currentFileName = filepath.FromSlash(jsonPath)
+		} else {
+			p.currentFileName = jsonPath
+		}
 
 		// Invoke API to request for logs
 		//
@@ -188,8 +223,16 @@ func (p *Popularity) RequestReposForPageToken(pagetoken string) (PopularList, er
 
 	// Since `IsWriteToFile` is false so it **doesn't** call `WriteToFile`
 	if p.IsWriteToFile {
-		//writing the reponse in ./popularity/namespace/currentfilename.json
-		p.WriteToFile(resp.Body(), p.currentFilename)
+		//writing the reponse in ./popularity/namespace/currentfileName.json
+		p.WriteToFile(resp.Body(), p.currentFileName, p.fileNamePath)
+		if err != nil {
+			return PopularList{}, errors.Wrapf(
+				err,
+				"Failed to write popularity data to file: %q",
+				p.currentFileName,
+			)
+		}
+		log.Printf("Sucessfully wrote PopularList to file --------------> " + p.currentFileName)
 	}
 
 	// it is capable of holding the list of images
@@ -213,19 +256,20 @@ func (p *Popularity) RequestReposForPageToken(pagetoken string) (PopularList, er
 // popularity ratings. This file is named with today's date.
 // It writes the content of response body into passed filename with
 // file mode 0644.
-func (p *Popularity) WriteToFile(raw []byte, filename string) error {
-	err := ioutil.WriteFile(
-		filename,
-		raw,
-		0644,
-	)
-	if err != nil {
+func (p *Popularity) WriteToFile(raw []byte, filename string, fpath string) error {
+	if fpath != "" {
+		if _, err := os.Stat(filename); os.IsNotExist(err) {
+			os.MkdirAll(fpath, 0700) // Create your file
+		}
+	}
+
+	errfile := ioutil.WriteFile(filename, raw, 0644)
+	if errfile != nil {
 		return errors.Wrapf(
-			err,
-			"Failed to write popularity list to %q",
+			errfile,
+			"Failed to write filename to %s",
 			filename,
 		)
 	}
-	log.Printf("Wrote popularity list to %q", filename)
 	return nil
 }
