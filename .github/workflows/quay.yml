@@ -20,6 +20,27 @@ jobs:
         echo "Starting to get openebs quay data"
         ./main --quay-auth-token=${{ secrets.QUAY_AUTH_TOKEN }} --quay-namespace=openebs
         echo "Finished getting logs"
+    - name: Calculating sizes of `logs` directory
+      # SIZE will be in Kilobytes (K); When nothing is downloaded, size is around 4K
+      run: |
+        SIZE=$(eval "du -shk logs")
+        read size dirname <<< $SIZE
+        echo $size
+        echo $dirname
+        echo "::set-env name=LOGS_DIR_SIZE::$size"
+    - name: Echo Directory size
+      run: |
+        echo "logs directory size is $LOGS_DIR_SIZE";
+    - name: Send message to Slack API
+      if: ${{ env.LOGS_DIR_SIZE < 10 }}
+      uses: archive/github-actions-slack@v1.0.3
+      with:
+        slack-bot-user-oauth-access-token: ${{ secrets.SLACK_BOT_USER_OAUTH_ACCESS_TOKEN }}
+        slack-channel: ${{ secrets.SLACK_CHANNEL }}
+        slack-text: > 
+          Latest downloaded data from [quay.io](https://quay.io) by ${{github.repository}} repository contains the aggregate total size of ${{ env.LOGS_DIR_SIZE }}KB. 
+          ${{ env.LOGS_DIR_SIZE }} KB is lower than threshold value [ 10KB ]. This could mean that **quay.io is down**.
+          Please check for [quay.io](https://quay.io) for openebs namespace.
     - name: Install binary of minio client
       run: |
         wget https://dl.min.io/client/mc/release/linux-amd64/mc
